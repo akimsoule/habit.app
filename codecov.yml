@@ -1,0 +1,15 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 1.0
+        threshold: 0%
+    patch:
+      default:
+        target: 1.0
+        threshold: 0%
+ignore:
+  - "dist/**"
+  - "docs/**"
+  - "test/**"
+  - "**/*.d.ts"

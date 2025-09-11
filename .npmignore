@@ -1,0 +1,9 @@
+# Ignore tout par défaut
+*
+
+# Conserver uniquement les artefacts de publication
+!.npmignore
+!dist/
+!dist/**
+!README.md
+!LICENSE
