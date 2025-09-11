@@ -1,6 +1,6 @@
 {
   "name": "habit.app",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Lib TypeScript de gestion d’habitudes, objectifs (SMART) et persistance JSON.",
   "main": "dist/index.js",
   "module": "dist/index.js",
