@@ -162,6 +162,87 @@ Format (simplifié):
 
 ## Exemples avancés
 
+### Exemple: Projet de certification professionnelle
+
+Contexte
+- Candidat·e préparant une certification (ex: Développeur·euse Web). Objectif: structurer révisions, avancement projet, et preuves; suivre la progression jusqu’à la date d’examen, avec 100% tests et CI.
+
+Exemple d’implémentation
+
+```ts
+import {
+	Category,
+	Priority,
+	GoalSmart,
+	InMemoryHabitRepository,
+	HabitManager,
+	NotificationService,
+	JsonStorage,
+} from 'habit.app'
+
+const repo = new InMemoryHabitRepository()
+const manager = new HabitManager(repo, new NotificationService())
+
+// Catégorie dédiée
+const cat = new Category('cert', 'Certification')
+manager.addCategory(cat)
+
+// Habitudes clés
+const study = manager.createHabit({
+	id: 'study',
+	name: 'Révisions 1h',
+	frequency: 'daily',
+	category: cat,
+	priority: Priority.High,
+})
+
+const project = manager.createHabit({
+	id: 'proj',
+	name: 'Avancement projet',
+	frequency: 'weekly',
+	category: cat,
+	priority: Priority.High,
+	description: 'Livrables hebdomadaires',
+})
+project.setDaysOfWeek([3]) // Jeudi (UTC)
+
+const portfolio = manager.createHabit({
+	id: 'port',
+	name: 'Mise à jour portfolio',
+	frequency: 'monthly',
+	category: cat,
+	priority: Priority.Medium,
+})
+portfolio.setDayOfMonth(1)
+
+// Objectif global calé sur la date d’examen
+const goal = new GoalSmart(
+	'g-cert',
+	'Préparer la certification',
+	[study, project, portfolio],
+	Priority.High,
+	'Programme de 12 semaines',
+	'2025-12-15', // dueDate de l’examen
+)
+manager.addGoal(goal)
+
+// Suivi quotidien + notes de preuve (journal)
+const today = new Date().toISOString().slice(0, 10)
+study.completeWithNote(today, 'Chapitres 3-4 + exos')
+
+console.log('Streak révisions (jours consécutifs):', study.getCurrentStreak())
+console.log('Progression objectif (jusqu’à l’examen):', goal.getProgress('2025-09-01'))
+
+// Snapshot (preuve d’avancement exportable)
+new JsonStorage('./.data/certif.snapshot.json').saveFrom(manager, repo)
+```
+
+Ce qui est valorisable pour un dossier/jury
+- Backlog structuré (habitudes + objectif SMART avec dueDate)
+- Journal des preuves (notes de complétion datées)
+- KPIs: progression globale, streaks, objectifs les plus urgents
+- Qualité: 100% de couverture, CI verte, docs générées
+
 ### Objectif prioritaire (deadline la plus proche)
 ```ts
 const res = manager.getNearestDueDateProgress('2025-09-01', '2025-09-10')

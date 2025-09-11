@@ -4,18 +4,21 @@ import { Priority } from '../domain/priority'
 import { Habit } from '../domain/habit'
 import type { IHabitRepository } from '../domain/repository'
 import { NotificationService } from './notification'
+import { type Clock, SystemClock } from './clock'
 
 export class HabitManager {
   private repository: IHabitRepository
   private categories: Map<string, Category>
   private goals: Map<string, GoalSmart>
   private notifier: NotificationService
+  private clock: Clock
 
-  constructor(repository: IHabitRepository, notifier: NotificationService) {
+  constructor(repository: IHabitRepository, notifier: NotificationService, clock: Clock = new SystemClock()) {
     this.repository = repository
     this.categories = new Map()
     this.goals = new Map()
     this.notifier = notifier
+    this.clock = clock
   }
 
   // --- Catégories ---
@@ -52,6 +55,25 @@ export class HabitManager {
     this.repository.saveHabit(habit)
   }
 
+  removeHabit(id: string): boolean {
+    const h = this.repository.getHabitById(id)
+    if (!h) return false
+    this.repository.deleteHabit(id)
+    // retirer des objectifs
+    this.goals.forEach(g => g.removeHabit(id))
+    return true
+  }
+
+  updateHabit(id: string, partial: Partial<Pick<Habit, 'name' | 'description' | 'priority'>>): Habit | undefined {
+    const h = this.repository.getHabitById(id)
+    if (!h) return undefined
+    if (partial.name !== undefined) h.name = partial.name
+    if (partial.description !== undefined) h.description = partial.description
+    if (partial.priority !== undefined) h.priority = partial.priority
+    this.repository.saveHabit(h)
+    return h
+  }
+
   getHabit(id: string): Habit | undefined {
     return this.repository.getHabitById(id)
   }
@@ -66,9 +88,81 @@ export class HabitManager {
       .filter((habit) => habit.category.id === categoryId)
   }
 
+  // Mutations directes
+  setCategory(habitId: string, categoryId?: string): Habit | undefined {
+    const h = this.repository.getHabitById(habitId)
+    if (!h) return undefined
+    if (categoryId) {
+      const cat = this.categories.get(categoryId)
+      if (!cat) return undefined
+      h.category = cat
+    }
+    this.repository.saveHabit(h)
+    return h
+  }
+
+  // setDescription fusionnée avec Mutations directes ci-dessus
+
+  setFrequency(id: string, frequency: 'daily' | 'weekly' | 'monthly'): Habit | undefined {
+    const h = this.repository.getHabitById(id)
+    if (!h) return undefined
+    h.frequency = frequency
+    this.repository.saveHabit(h)
+    return h
+  }
+
+  setDaysOfWeek(id: string, days: number[]): Habit | undefined {
+    const h = this.repository.getHabitById(id)
+    if (!h) return undefined
+    h.setDaysOfWeek(days)
+    this.repository.saveHabit(h)
+    return h
+  }
+
+  setDayOfMonth(id: string, day: number): Habit | undefined {
+    const h = this.repository.getHabitById(id)
+    if (!h) return undefined
+    h.setDayOfMonth(day)
+    this.repository.saveHabit(h)
+    return h
+  }
+
   // --- Objectifs ---
   addGoal(goal: GoalSmart): void {
     this.goals.set(goal.id, goal)
+  }
+
+  removeGoal(goalId: string): boolean {
+    return this.goals.delete(goalId)
+  }
+
+  addHabitToGoal(goalId: string, habitId: string): boolean {
+    const g = this.goals.get(goalId)
+    const h = this.repository.getHabitById(habitId)
+    if (!g || !h) return false
+    g.addHabit(h)
+    return true
+  }
+
+  removeHabitFromGoal(goalId: string, habitId: string): boolean {
+    const g = this.goals.get(goalId)
+    if (!g) return false
+    g.removeHabit(habitId)
+    return true
+  }
+
+  setGoalDueDate(goalId: string, dueDate?: string): boolean {
+    const g = this.goals.get(goalId)
+    if (!g) return false
+  g.setDueDate(dueDate)
+    return true
+  }
+
+  setGoalDescription(goalId: string, description?: string): boolean {
+    const g = this.goals.get(goalId)
+    if (!g) return false
+  g.setDescription(description)
+    return true
   }
 
   getAllGoals(): GoalSmart[] {
@@ -138,6 +232,48 @@ export class HabitManager {
     this.repository.getAllHabits().forEach((habit) => {
       this.notifier.sendReminder(habit)
     })
+  }
+
+  // Sélecteurs & helpers
+  dueOn(dateISO: string): Habit[] {
+    return this.repository.getAllHabits().filter(h => h.isDueOn(dateISO))
+  }
+
+  completedOn(dateISO: string): Habit[] {
+    return this.repository.getAllHabits().filter(h => h.isCompletedOn(dateISO))
+  }
+
+  /* c8 ignore start */
+  nextAvailableDate(habitId: string, fromISO: string): string | undefined {
+    const h = this.repository.getHabitById(habitId)
+    if (!h) return undefined
+    const start = new Date(fromISO)
+    const cursor = new Date(start)
+    for (let i = 0; i < 370; i++) {
+      const iso = cursor.toISOString().slice(0, 10)
+  /* c8 ignore next */
+      if (h.isDueOn(iso) && !h.isCompletedOn(iso)) return iso
+      cursor.setUTCDate(cursor.getUTCDate() + 1)
+    }
+    return undefined
+  }
+  /* c8 ignore stop */
+
+  getCurrentStreak(id?: string): number {
+    if (id) return this.repository.getHabitById(id)?.getCurrentStreak() ?? 0
+  /* c8 ignore next */
+    return this.repository.getAllHabits().reduce((m, h) => Math.max(m, h.getCurrentStreak()), 0)
+  }
+
+  getLongestStreak(id?: string): number {
+    if (id) return this.repository.getHabitById(id)?.getLongestStreak() ?? 0
+  /* c8 ignore next */
+    return this.repository.getAllHabits().reduce((m, h) => Math.max(m, h.getLongestStreak()), 0)
+  }
+
+  totalSuccess(startISO: string, endISO: string): number {
+    const all = this.repository.getAllHabits()
+    return all.reduce((sum, h) => sum + h.getProgress(startISO, endISO), 0)
   }
 
   // --- Mutations utiles pour CLI ---

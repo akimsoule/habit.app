@@ -10,6 +10,7 @@ export class Habit {
   public priority: Priority
   public archived: boolean
   private completedDates: Set<string>
+  private completionNotes: Map<string, string>
   public daysOfWeek?: number[] // 0=Dimanche .. 6=Samedi (pour weekly)
   public dayOfMonth?: number // 1..31 (pour monthly)
 
@@ -29,6 +30,7 @@ export class Habit {
     this.description = description
     this.archived = false
     this.completedDates = new Set()
+  this.completionNotes = new Map()
   }
 
   markAsCompleted(date: string): void {
@@ -47,12 +49,56 @@ export class Habit {
     }
   }
 
+  completeWithNote(date: string, note: string): void {
+    this.markAsCompleted(date)
+    this.completionNotes.set(date, note)
+  }
+
+  getCompletionNote(date: string): string | undefined {
+    return this.completionNotes.get(date)
+  }
+
   isCompletedOn(date: string): boolean {
     return this.completedDates.has(date)
   }
 
   getCompletionHistory(): string[] {
     return Array.from(this.completedDates).sort()
+  }
+
+  getCurrentStreak(): number {
+    const days = this.getCompletionHistory()
+    if (days.length === 0) return 0
+    // partir d'aujourd'hui UTC
+    let count = 0
+    const today = new Date()
+    let cursor = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()))
+    while (true) {
+      const iso = cursor.toISOString().slice(0, 10)
+      if (this.completedDates.has(iso)) {
+        count++
+        cursor.setUTCDate(cursor.getUTCDate() - 1)
+      } else break
+    }
+    return count
+  }
+
+  getLongestStreak(): number {
+    const days = this.getCompletionHistory()
+    if (days.length === 0) return 0
+    let longest = 1
+    let curr = 1
+    for (let i = 1; i < days.length; i++) {
+      const prevStr = days[i - 1]!
+      const currStr = days[i]!
+      const prev = new Date(prevStr)
+      const currd = new Date(currStr)
+      const diff = (currd.getTime() - prev.getTime()) / (24 * 3600 * 1000)
+      if (diff === 1) curr++
+      else curr = 1
+      if (curr > longest) longest = curr
+    }
+    return longest
   }
 
   getLastCompleted(): string | undefined {

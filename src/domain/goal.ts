@@ -33,6 +33,14 @@ export class GoalSmart {
     this.habits = this.habits.filter((h) => h.id !== habitId)
   }
 
+  setDueDate(due?: string): void {
+    this.dueDate = due
+  }
+
+  setDescription(desc?: string): void {
+    this.description = desc
+  }
+
   getHabits(): Habit[] {
     return this.habits
   }

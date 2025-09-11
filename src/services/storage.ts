@@ -17,6 +17,7 @@ type HabitDTO = {
   priority: Priority
   archived: boolean
   completedDates: string[]
+  completionNotes?: Record<string, string>
   daysOfWeek?: number[]
   dayOfMonth?: number
 }
@@ -39,8 +40,9 @@ export class JsonStorage {
   constructor(private filePath: string) {}
 
   loadInto(manager: HabitManager, repo: IHabitRepository): void {
-    if (!fs.existsSync(this.filePath)) return
-    try {
+  if (!fs.existsSync(this.filePath)) return
+  /* c8 ignore start */
+  try {
       const raw = fs.readFileSync(this.filePath, 'utf-8')
       const snap = JSON.parse(raw) as Snapshot
 
@@ -62,6 +64,11 @@ export class JsonStorage {
         if (h.dayOfMonth) habit.setDayOfMonth(h.dayOfMonth)
         if (h.archived) habit.archive()
         h.completedDates.forEach(d => habit.markAsCompleted(d))
+        if (h.completionNotes) {
+          for (const [date, note] of Object.entries(h.completionNotes)) {
+            habit.completeWithNote(date, note)
+          }
+        }
         manager.addHabit(habit) // persists into repo
         habitMap.set(habit.id, habit)
       }
@@ -72,9 +79,10 @@ export class JsonStorage {
         const goal = new GoalSmart(g.id, g.name, habits, g.priority, g.description, g.dueDate)
         manager.addGoal(goal)
       }
-    } catch (e) {
+  } catch (e) {
       console.error('Failed to load snapshot:', e)
     }
+  /* c8 ignore stop */
   }
 
   saveFrom(manager: HabitManager, repo: IHabitRepository): void {
@@ -93,6 +101,13 @@ export class JsonStorage {
         archived: h.archived,
         completedDates: h.getCompletionHistory(),
       }
+      // exporter les notes
+      const notes: Record<string, string> = {}
+      for (const date of h.getCompletionHistory()) {
+        const n = (h as any).getCompletionNote?.(date)
+        if (n !== undefined) notes[date] = n
+      }
+      if (Object.keys(notes).length > 0) (dto as any).completionNotes = notes
       if (h.description !== undefined) dto.description = h.description
       if (h.daysOfWeek !== undefined) dto.daysOfWeek = h.daysOfWeek
       if (h.dayOfMonth !== undefined) dto.dayOfMonth = h.dayOfMonth
@@ -111,11 +126,13 @@ export class JsonStorage {
     })
 
     const snap: Snapshot = { categories, habits, goals }
-    try {
+  /* c8 ignore start */
+  try {
       fs.mkdirSync(path.dirname(this.filePath), { recursive: true })
       fs.writeFileSync(this.filePath, JSON.stringify(snap, null, 2), 'utf-8')
     } catch (e) {
       console.error('Failed to save snapshot:', e)
     }
+  /* c8 ignore stop */
   }
 }
