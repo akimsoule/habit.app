@@ -6,7 +6,7 @@
 ![types](https://img.shields.io/badge/types-TypeScript-blue)
 ![license](https://img.shields.io/badge/license-ISC-green)
 
-Librairie TypeScript/ESM pour modéliser des habitudes, objectifs SMART (avec date butoir), catégories et persistance JSON. Conçue pour être intégrée dans des apps Node/React/Vite.
+Librairie TypeScript/ESM pour modéliser des habitudes, objectifs SMART (avec date butoir), catégories et persistance JSON. Conçue pour être intégrée dans des apps Node/React/Vite, sans dépendances Node (fs/path) dans le cœur de la lib.
 
 ## Sommaire
 - Présentation et fonctionnalités
@@ -26,9 +26,10 @@ Librairie TypeScript/ESM pour modéliser des habitudes, objectifs SMART (avec da
 - Habitudes récurrentes: daily/weekly/monthly avec paramètres (jours/semaine, jour du mois).
 - Objectifs SMART: regroupent des habitudes et possèdent une date butoir (`dueDate`) utilisée pour calculer la progression par défaut.
 - Catégories et priorités pour organiser vos habitudes.
-- Persistance JSON:
-	- Snapshot complet via `JsonStorage` (categories + habits + goals).
-	- (Option) Répertoire JSON de base via `JsonHabitRepository` (habitudes seules).
+- Persistance JSON (agnostique plateforme):
+	- Snapshot complet via `JsonStorage` branché sur un `IStorageProvider`.
+	- Provider mémoire inclus: `InMemoryStorageProvider`.
+	- (Déprécié) Répertoire JSON disque via `JsonHabitRepository`: la version côté lib n’utilise PAS fs/path et ne persiste pas sur disque (voir détails plus bas).
 - Manager de haut niveau (`HabitManager`): création, mutations, agrégation de progressions, rappels.
 - TypeScript strict, 100% coverage (pour le cœur de la lib), ESM ready.
 
@@ -52,11 +53,14 @@ import {
 	HabitManager,
 	NotificationService,
 	JsonStorage,
+	StorageHelper,
 } from 'habit.app'
+import { InMemoryStorageProvider } from 'habit.app/dist/services/storage/memory.js'
 
 const repo = new InMemoryHabitRepository()
 const manager = new HabitManager(repo, new NotificationService())
-const storage = new JsonStorage('./.data/snapshot.json')
+// Stockage snapshot: injectez un provider (ici, mémoire)
+const storage = new JsonStorage(new InMemoryStorageProvider())
 
 const cat = new Category('imm', 'Immigration')
 manager.addCategory(cat)
@@ -142,12 +146,14 @@ Règles de due:
 ### Repository
 - IHabitRepository: saveHabit, getHabitById, getAllHabits({ includeArchived? }), deleteHabit
 - InMemoryHabitRepository: implémentation en mémoire (par défaut pour apps runtime/tests).
-- JsonHabitRepository: persistance simple d’habitudes dans un fichier JSON (voir `src/domain/repository.json.ts`).
+- JsonHabitRepository: version « lib » in-memory (pas de fs/path). La persistance DISQUE est déportée hors de la lib. Voir `src/domain/repository.json.ts` (dépréciation notée dans le fichier) si besoin d’une base temporaire en mémoire avec une API similaire.
 
 ### Storage (snapshot complet)
-- JsonStorage(filePath)
+- JsonStorage(provider: IStorageProvider)
 	- loadInto(manager, repo): charge categories, habits, goals
 	- saveFrom(manager, repo)
+- IStorageProvider (interface): abstrait la lecture/écriture du snapshot.
+- InMemoryStorageProvider: stocke le snapshot en mémoire (copie profonde).
 
 Format (simplifié):
 - CategoryDTO: { id, name, description? }
@@ -280,31 +286,6 @@ npm run build
 npm run docs
 ```
 
-- Publication npm (exemple):
-
-```bash
-npm login
-npm publish --access public
-```
-
-Recommandé: configurer `prepublishOnly` pour exécuter build+tests avant la publication.
-
-Publication manuelle (première fois):
-
-```bash
-npm login
-npm publish --access public --provenance
-```
-
-CI Publish (GitHub Actions):
-- Ajoutez le secret `NPM_TOKEN` (Settings → Secrets → Actions).
-- Créez une release GitHub (Draft new release) sur `main` → la publication npm est déclenchée.
-
-Couverture automatique (badge):
-- Badge statique inclus ci-dessus. Pour un badge dynamique, activez Codecov et remplacez le badge par:
-	- `https://codecov.io/gh/<owner>/<repo>/branch/main/graph/badge.svg`
-	- Lien: `https://app.codecov.io/gh/<owner>/<repo>`
-
 ## Intégration TypeScript (Node, Vite, Next)
 
 La librairie est ESM avec types fournis. Quelques recommandations pour un projet TypeScript consommateur:
@@ -315,7 +296,10 @@ La librairie est ESM avec types fournis. Quelques recommandations pour un projet
 		- "moduleResolution": "Bundler"
 	- Import:
 		```ts
-		import { HabitManager, InMemoryHabitRepository } from 'habit.app'
+		import { HabitManager, InMemoryHabitRepository, JsonStorage } from 'habit.app'
+		import { InMemoryStorageProvider } from 'habit.app/dist/services/storage/memory.js'
+		// Injection du provider de stockage
+		const storage = new JsonStorage(new InMemoryStorageProvider())
 		```
 
 - Node + tsx/vite-node/ts-node ESM
@@ -329,7 +313,8 @@ La librairie est ESM avec types fournis. Quelques recommandations pour un projet
 		- "moduleResolution": "bundler" (ou "nodenext" si vous préférez le mode Node ESM)
 	- Import ESM uniquement (pas de require):
 		```ts
-		import { HabitManager } from 'habit.app'
+		import { HabitManager, JsonStorage } from 'habit.app'
+		import { InMemoryStorageProvider } from 'habit.app/dist/services/storage/memory.js'
 		```
 
 - Jest vs Vitest
