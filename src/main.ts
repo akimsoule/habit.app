@@ -4,25 +4,18 @@ import { Priority } from "./domain/priority";
 import { InMemoryHabitRepository } from "./domain/repository";
 import { NotificationService } from "./services/notification";
 import { HabitManager } from "./services/manager";
-import fs from "node:fs";
 import { JsonStorage } from "./services/storage";
+import { InMemoryStorageProvider } from "./services/storage/memory";
 
 // ---- Projet: Faire venir ma femme d'ici 2 ans ----
 const dataFile = `${process.cwd()}/.data/snapshot.json`;
 // --- Reset des données (mettre à true pour repartir de zéro) ---
 const RESET_DATA = true;
-if (RESET_DATA) {
-  try {
-    fs.rmSync(dataFile, { force: true });
-  console.log("🧹 Données réinitialisées (.data/snapshot.json)");
-  } catch (e) {
-    console.error("Échec de la réinitialisation des données:", e);
-  }
-}
+// La suppression du fichier est déléguée à l'environnement d'exécution (ex: script Node externe)
 const repo = new InMemoryHabitRepository();
 const notifier = new NotificationService();
 const manager = new HabitManager(repo, notifier);
-const storage = new JsonStorage(dataFile);
+const storage = new JsonStorage(new InMemoryStorageProvider());
 
 // Charger un snapshot complet (catégories, habitudes, objectifs) si présent
 storage.loadInto(manager, repo);
@@ -126,8 +119,8 @@ console.log(
 const nearest = manager.getNearestDueDateProgress("2025-09-01", todayISO);
 if (nearest) {
   console.log(
-    `⏳ Objectif prioritaire: ${nearest.goalName} (due ${nearest.dueDate}) → ${nearest.progress.toFixed(
-      1
-    )}%`
+    `⏳ Objectif prioritaire: ${nearest.goalName} (due ${
+      nearest.dueDate
+    }) → ${nearest.progress.toFixed(1)}%`
   );
 }

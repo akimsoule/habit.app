@@ -6,3 +6,5 @@ export { InMemoryHabitRepository, type IHabitRepository } from './domain/reposit
 export { HabitManager } from './services/manager'
 export { NotificationService } from './services/notification'
 export { JsonStorage } from './services/storage'
+export type { IStorageProvider } from './services/storage/provider'
+export { StorageHelper } from './services/storage/provider'
